@@ -1,0 +1,93 @@
+<?php
+
+function nitro_sendy_install() {
+    drupal_install_schema('nitro_sendy_schema');
+}
+function nitro_sendy_uninstall() {
+    drupal_uninstall_schema('nitro_sendy_schema');
+}
+
+function nitro_sendy_schema() {
+
+    $schema['nitro_sendy'] = array(
+            'description' => t('Table containing the forms'),
+            'fields' => array(
+                'id' => array(
+                    'description' => t('The primary identifier.'),
+                    'type' => 'serial',
+                    'unsigned' => TRUE),
+                'active' => array(
+                    'description' => t('Decides wether the module is activated or not'),
+                    'type' => 'int',
+                    'unsigned' => TRUE,
+                    'default' => '0'),
+                'api_key' => array(
+                    'description' => t('The Sendy API-Key'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'url' => array(
+                    'description' => t('URL'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'from_name' => array(
+                    'description' => t('From name of campaign'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'from_email' => array(
+                    'description' => t('From email of campaign'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'reply_to' => array(
+                    'description' => t('Reply to of campaign'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'subject' => array(
+                    'description' => t('Subject of campaign'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'list_id' => array(
+                    'description' => t('the list id of recipients'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'list_id_subscriber' => array(
+                    'description' => t('the list id for subscribing'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'list_id_check' => array(
+                    'description' => t('the last checked List ID'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => '0'),
+                'subscriber_number' => array(
+                    'description' => t('number of subscribers for given List ID'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => '0'),
+                'brand_id' => array(
+                    'description' => t('Requiered to create a draft'),
+                    'type' => 'varchar',
+                    'length' => 255,
+                    'default' => ''),
+                'send_campaign' => array(
+                    'description' => t('decides wether to send the campaign or not'),
+                    'type' => 'int',
+                    'unsigned' => TRUE,
+                    'default' => '0'),
+
+            ),
+            'unique keys' => array(
+                'id' => array('id'),
+            ),
+            'primary key' => array('id'),
+        );
+
+    return $schema;
+}

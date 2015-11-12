@@ -1,0 +1,327 @@
+<?php
+
+include ('includes/nitro_sendy.class.inc');
+
+
+
+/***************************************************************************************************************************************************************
+ * Setting up own permissions
+ **************************************************************************************************************************************************************/
+/**
+ * Implements hook_permission()
+ * Define own Permissions
+ */
+function nitro_sendy_permission() {
+    return array (
+        'sendy' => array (
+            'title' => t('Vollzugriff Modul'),
+            'description' => t('Erlaubt den vollen Zugriff auf das Modul'),
+        )
+    );
+}
+
+function nitro_sendy_user_access()
+{
+    return user_access('sendy') || user_access('administrator');
+}
+
+function nitro_sendy_permission_check()
+{
+    global $user;
+
+    if (in_array('sendy', $user->roles) || in_array('administrator', $user->roles)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function nitro_sendy_menu()
+{
+    $menu = array();
+
+    $menu['admin/config/services/sendy'] = array(
+        'title' => 'Sendy',
+        'description' => 'Settings for sendy',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('nitro_sendy_form'),
+        'access callback' => 'nitro_sendy_user_access',
+        'type' => MENU_NORMAL_ITEM,
+    );
+
+    return $menu;
+}
+
+
+/**
+ * Implements hook_node_update().
+ */
+function nitro_sendy_node_update($node) {
+
+    if ($node->type == 'article') {
+
+        // Act on the unpublishing of an article.
+        if ($node->original->status == 1 && $node->status == 0) {
+        }
+        // Act on the publishing of an article.
+        if ($node->original->status == 0 && $node->status == 1) {
+
+            $html = "";
+            $title = $node->title;
+            $body = $node->body['und'][0]['value'];
+            $path = $node->path['alias'];
+
+            $file = file_load($node->field_image['und'][0]['fid']);
+            $image = image_style_url('newsletter', $file->uri);
+
+            if (function_exists('nitro_sendy_get_html'))
+                $html = nitro_sendy_get_html($title, $body, $image, $path);
+
+            nitro_sendy::nitro_sendy_post($title, $html);
+
+        }
+    }
+}
+
+
+/**
+ * Implements hook_form_submit().
+ */
+function nitro_sendy_form_submit($form, &$form_state) {
+    if ($form_state['clicked_button']['#name'] == "save") {
+        nitro_sendy::nitro_sendy_save_settings($form_state['input']);
+    }
+    else if ($form_state['clicked_button']['#name'] == "update") {
+        nitro_sendy::nitro_sendy_active_subscriber_count($form_state['input']["list_id_check"]);
+    }
+}
+
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function nitro_sendy_preprocess_html(&$variables) {
+    // reference your own css file
+    drupal_add_css(drupal_get_path('module', 'nitro_sendy') . '/nitro_sendy.css');
+}
+
+
+function nitro_sendy_form() {
+    if(nitro_sendy_permission_check() === false) {
+        return null;
+    }
+
+    $subscribers = nitro_sendy::nitro_sendy_get_subscribers();
+
+    $form = array();
+
+    $data = nitro_sendy::nitro_sendy_load_settings();
+
+    $form['active'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Active:'),
+        '#options' => array(
+            1 => t('Yes'),
+        ),
+        '#value' => $data['active'],
+        '#description' => t('Set <em>Active</em> to use the module'),
+        '#required' => TRUE,
+    );
+
+    //Headline
+    $form['fieldset_one'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Sendy - Seetings'),
+        '#collapsible' => FALSE,
+        '#collapsed' => FALSE,
+        '#states' => array(
+            'visible' => array(
+                ':input[name="active"]' => array('checked' => TRUE),
+            ),
+        ),
+        '#prefix' => '<div class="wrapper-left">',
+        '#suffix' => '</div>',
+    );
+
+    $form['fieldset_one']['api'] = array(
+        '#title' => "API-Key:",
+        '#type' => 'textfield',
+        '#description' => t('your API key, available in Settings.'),
+        '#value' => $data['api_key'],
+    );
+
+    $form['fieldset_one']['url'] = array(
+        '#title' => "URL:",
+        '#type' => 'textfield',
+        '#description' => t('the url to your Sendy installation. ( e.g.: https://example.sendy.com/ )'),
+        '#value' => $data['url'],
+    );
+
+    $form['fieldset_one']['from_name'] = array(
+        '#title' => "From name:",
+        '#type' => 'textfield',
+        '#description' => t('the "From name" of your campaign'),
+        '#value' => $data['from_name'],
+    );
+
+    $form['fieldset_one']['from_email'] = array(
+        '#title' => "From email:",
+        '#type' => 'textfield',
+        '#description' => t('the "From email" of your campaign'),
+        '#value' => $data['from_email'],
+    );
+
+    $form['fieldset_one']['reply_to'] = array(
+        '#title' => "Reply to:",
+        '#type' => 'textfield',
+        '#description' => t('the "Reply to" of your campaign'),
+        '#value' => $data['reply_to'],
+    );
+
+    $form['fieldset_one']['subject'] = array(
+        '#title' => "Subject-Prefix:",
+        '#type' => 'textfield',
+        '#description' => t('the "Subject-Prefix" of your campaign'),
+        '#value' => $data['subject'],
+    );
+
+    $form['fieldset_one']['list_id'] = array(
+        '#title' => "List ID:",
+        '#type' => 'textfield',
+        '#description' => t('Required only if you set "Send campaign" to Yes to send the campaign and not just create a draft. List IDs should be single or comma-separated.'),
+        '#value' => $data['list_id'],
+    );
+
+    $form['fieldset_one']['list_id_subscriber'] = array(
+        '#title' => "List ID (For subscribing):",
+        '#type' => 'textfield',
+        '#description' => t('New subscriber will be added to this list.'),
+        '#value' => $data['list_id_subscriber'],
+    );
+
+    $form['fieldset_one']['brand_id'] = array(
+        '#title' => "Brand ID:",
+        '#type' => 'textfield',
+        '#description' => t('Required only if you are creating a "Draft" campaign ("Send campaign" set to No or left as default).'),
+        '#value' => $data['brand_id'],
+    );
+
+    $form['fieldset_one']['send_campaign'] = array(
+        '#type' => 'select',
+        '#title' => t('Send campaign:'),
+        '#options' => array(
+            0 => t('No'),
+            1 => t('Yes'),
+        ),
+        '#default_value' => $data['send_campaign'],
+        '#description' => t('Set to <em>Yes</em> if you want to send the campaign as well and not just create a draft. '),
+    );
+
+    $form['fieldset_two'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Save'),
+        '#collapsible' => FALSE,
+        '#collapsed' => FALSE,
+        '#prefix' => '<div class="wrapper-right">',
+    );
+
+    $form['fieldset_two']['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Save configuration'),
+        '#name' => 'save',
+    );
+
+    $form['fieldset_three'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Show information'),
+        '#collapsible' => FALSE,
+        '#collapsed' => FALSE,
+    );
+
+    $form['fieldset_three']['list_id_check'] = array(
+        '#title' => "List ID:",
+        '#type' => 'textfield',
+        '#description' => t('Returning the number of subscribers for the given List ID'),
+        '#value' => $data['list_id_check'],
+    );
+
+    $form['fieldset_three']['subscriber_number'] = array(
+        '#title' => "Subscribers:",
+        '#type' => 'textfield',
+        '#description' => t('Number of subscribers for the given List ID'),
+        '#attributes' => array ('disabled' => true),
+        '#value' => $subscribers,
+    );
+
+    $form['fieldset_three']['update'] = array(
+        '#type' => 'submit',
+        '#value' => t('Update'),
+        '#name' => 'update',
+        '#suffix' => '</div>',
+    );
+
+    return $form;
+}
+
+
+// Project specific functions
+function nitro_sendy_get_html($title, $body, $image, $path) {
+    global $base_url;
+    global $language;
+    $image_path = $base_url . "/sites/all/themes/nitrokey/img/";
+    $body = nitro_sendy_fix_body_links($body);
+
+    $languageiso = '';
+    if ($language->language != 'en')
+        $languageiso = '/'.$language->language;
+
+    $node_path = $base_url . $languageiso . '/' . $path;
+
+    $html = file_get_contents('newsletter.html', FILE_USE_INCLUDE_PATH);
+
+    $html = str_replace('[IMAGE]', $image, $html);
+    $html = str_replace('[IMAGE_PATH]', $image_path, $html);
+    $html = str_replace('[TITLE]', $title, $html);
+    $html = str_replace('[BODY]', $body, $html);
+    $html = str_replace('[PATH]', $node_path, $html);
+
+    return $html;
+}
+
+
+// This function adds the base path for all links found in the node body
+function nitro_sendy_fix_body_links($body) {
+
+    $body = preg_replace_callback('/<a href="(\/?.*)">(.*)<\/a>/', 'nitro_sendy_fix_body_links_callback', $body);
+
+    return $body;
+}
+
+
+function nitro_sendy_fix_body_links_callback($match) {
+    global $base_url;
+    global $language;
+    $slash = '';
+    $languageiso = '';
+
+    preg_match('/https?:\/\/(www.)?(.*)/', $base_url, $url);
+
+    if ( strpos($match[1], $url[2]) === false) {
+        if (substr($match[1], 0, 1) != '/') {
+            $slash = '/';
+        }
+        if ($language->language != 'en')
+            $languageiso = '/'.$language->language;
+
+        $match = '<a href="' . $base_url . $languageiso . $slash . $match[1] . '">' . $match[2] . '</a>';
+
+        return $match;
+    }
+    else {
+        return $match[0];
+    }
+
+}

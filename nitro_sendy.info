@@ -1,0 +1,4 @@
+name = Nitrokey Sendy
+description = "Module for Sendy use"
+package = nitrokey
+core = 7.x

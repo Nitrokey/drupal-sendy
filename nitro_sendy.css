@@ -1,0 +1,9 @@
+.wrapper-left {
+    width: 50%;
+    float: left;
+}
+
+.wrapper-right {
+    width: 35%;
+    float: right;
+}
